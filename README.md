@@ -145,7 +145,7 @@
   <div data-role="toast" style="display:none;position:fixed;right:16px;bottom:16px;z-index:80"></div>
 
   <!-- Áudio de introdução (toca apenas na landing, até escolher o segmento) -->
-  <audio id="intro-audio" preload="auto" loop class="hidden">
+  <audio id="intro-audio" preload="auto" loop autoplay muted class="hidden">
     <source src="intro.mp3.mp3" type="audio/mpeg" />
     <source src="intro.mp3" type="audio/mpeg" />
   </audio>
@@ -391,7 +391,7 @@
   function loginOrCreate({email,name,isClient}){
     if(!validateEmail(email)){ toast("Email inválido","Insira um email válido."); return; }
     State.user = { email, name: name||undefined, isClient: !!isClient, preferredSegment: State.segment!==Segment.LANDING ? State.segment : undefined };
-    persistUser(); toast(Bem-vindo${name ? ", "+name : ""}!, isClient?"Conta de cliente criada.":"Login como convidado."); render();
+    persistUser(); toast(`Bem-vindo${name ? ", "+name : ""}!`, isClient?"Conta de cliente criada.":"Login como convidado."); render();
   }
   function toggleClient(){ if(!State.user) return; State.user.isClient=!State.user.isClient; persistUser(); toast(State.user.isClient?"Agora você é cliente":"Agora você é convidado"); render(); }
   function logout(){ State.user=null; try{ localStorage.removeItem(STORAGE.USER); }catch{} toast("Você saiu da conta"); render(); }
@@ -400,7 +400,7 @@
   function toast(title, description){ const box=document.querySelector("[data-role='toast']"); if(!box) return; box.innerHTML = `
     <div class="toast" role="status" aria-live="polite">
       <div class="toast-title">${title}</div>
-      ${description ? <div class="toast-desc">${description}</div> : ""}
+      ${description ? `<div class="toast-desc">${description}</div>` : ""}
     </div>
   `; box.style.display='block'; clearTimeout(toastTimer); toastTimer=setTimeout(()=>{ box.style.display='none'; }, 3200); }
 
@@ -430,7 +430,7 @@
   function renderProducts(container, list, { showCheapBadge=false }={}){
     if(!container) return;
     container.innerHTML = list.map(p=>{
-      const cheapBadge = showCheapBadge ? <span class=\"badge ${State.segment===Segment.MAS?'neon-dark':'neon-light'}\">Bom & Barato</span> : "";
+      const cheapBadge = showCheapBadge ? `<span class=\"badge ${State.segment===Segment.MAS?'neon-dark':'neon-light'}\">Bom & Barato</span>` : "";
       return `
       <div class="card ${State.segment===Segment.MAS?'dark':''}">
         <div class="card-img">
@@ -486,13 +486,13 @@
     const totals = computeTotals(detailed.map(it=>({price:it.product.price, qty:it.qty})), State.couponApplied);
     const totalsHtml = `
       <div class='row'><span>Subtotal</span><span>${price(totals.subtotal)}</span></div>
-      ${totals.discount>0 ? <div class='row green'><span>Desconto (${State.couponApplied})</span><span>-${price(totals.discount)}</span></div> : ""}
-      <div class='row'><span>Frete</span><span>${totals.shipping===0 ? <span class='free'>Grátis</span> : price(totals.shipping)}</span></div>
+      ${totals.discount>0 ? `<div class='row green'><span>Desconto (${State.couponApplied})</span><span>-${price(totals.discount)}</span></div>` : ""}
+      <div class='row'><span>Frete</span><span>${totals.shipping===0 ? `<span class='free'>Grátis</span>` : price(totals.shipping)}</span></div>
       <div class='row total'><span>Total</span><span>${price(totals.total)}</span></div>`;
 
-    if (listEl) listEl.innerHTML = detailed.length ? renderListHtml(detailed) : <div class='muted'>Seu carrinho está vazio.</div>;
+    if (listEl) listEl.innerHTML = detailed.length ? renderListHtml(detailed) : `<div class='muted'>Seu carrinho está vazio.</div>`;
     if (totalsEl) totalsEl.innerHTML = detailed.length ? totalsHtml : '';
-    if (listModal) listModal.innerHTML = detailed.length ? renderListHtml(detailed) : <div class='muted'>Seu carrinho está vazio.</div>;
+    if (listModal) listModal.innerHTML = detailed.length ? renderListHtml(detailed) : `<div class='muted'>Seu carrinho está vazio.</div>`;
     if (totalsModal) totalsModal.innerHTML = detailed.length ? totalsHtml : '';
 
     document.querySelectorAll("[data-action='qty-dec']").forEach(b=> b.addEventListener('click', ()=> setQty(b.dataset.id, (State.cart.find(i=>i.id===b.dataset.id)?.qty ?? 1)-1)) );
@@ -533,7 +533,7 @@
     if (catSelect) {
       const cats = listCategories();
       const prev = State.category;
-      catSelect.innerHTML = cats.map(c => <option value="${c}">${c}</option>).join("");
+      catSelect.innerHTML = cats.map(c => `<option value="${c}">${c}</option>`).join("");
       if (!cats.includes(prev)) State.category = "todas";
       catSelect.value = State.category;
     }
@@ -656,6 +656,30 @@
 
     console.log('%c✔ auto-tests passaram','color:#16a34a;font-weight:bold');
   })();
+  </script>
+  <script>
+    // Re-define setupIntroAudio to garantir autoplay (muted) na landing e desmute no primeiro gesto
+    function setupIntroAudio(){
+      var audio = document.getElementById('intro-audio');
+      if(!audio) return;
+      var targetVol = 0.4;
+      if (State.segment === Segment.LANDING) {
+        try { audio.muted = true; audio.volume = targetVol; audio.play().catch(function(){}); } catch(e){}
+        var tryUnmute = function(){
+          if (State.segment === Segment.LANDING) {
+            try { audio.muted = false; audio.volume = targetVol; audio.play().catch(function(){}); } catch(e){}
+          }
+          window.removeEventListener('pointerdown', tryUnmute, true);
+          window.removeEventListener('keydown', tryUnmute, true);
+        };
+        window.addEventListener('pointerdown', tryUnmute, true); // capture para ocorrer antes do clique que troca segmento
+        window.addEventListener('keydown', tryUnmute, true);
+      } else {
+        try { audio.pause(); audio.currentTime = 0; audio.muted = true; } catch(e){}
+      }
+    }
+    // chama uma vez no final para garantir o estado correto ao carregar
+    try { setupIntroAudio(); } catch(e){}
   </script>
 </body>
 </html>
